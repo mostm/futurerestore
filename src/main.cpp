@@ -81,6 +81,7 @@ static struct option longopts[] = {
 #define FLAG_CUSTOM_IBSS            1 << 18
 #define FLAG_CUSTOM_IBEC            1 << 19
 
+
 void cmd_help(){
     printf("Usage: futurerestore [OPTIONS] iPSW\n");
     printf("Allows restoring to non-matching firmware with custom SEP+baseband\n");
@@ -136,7 +137,7 @@ int main_r(int argc, const char * argv[]) {
         SetConsoleMode(handle, termFlags | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 #endif
     int err=0;
-    printf("Version: " VERSION_RELEASE "(" VERSION_COMMIT_SHA "-" VERSION_COMMIT_COUNT ")\n");
+    printf("Specific for ra1nstorm\n");
     printf("%s\n",tihmstar::img4tool::version());
 #ifdef HAVE_LIBIPATCHER
     printf("%s\n",libipatcher::version());
@@ -390,7 +391,7 @@ int main_r(int argc, const char * argv[]) {
             client.setKernelPath(kernelPath);
             client.loadKernel(kernelPath);
         }
-
+        
         if(flags & FLAG_CUSTOM_IBSS) {
             client.setiBSSPath(iBSSPath);
         }
@@ -400,7 +401,7 @@ int main_r(int argc, const char * argv[]) {
         }
 
         if(flags & FLAG_SET_NONCE) {
-            reterror("--set-nonce is disabled in this fork\n");
+            reterror("--set-nonce is not implemented in this fork\n");
             return -1;
         }
 

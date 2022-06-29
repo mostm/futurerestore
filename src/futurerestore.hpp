@@ -64,7 +64,7 @@ class futurerestore {
     bool _serial = false;
     bool _noRestore = false;
     bool _customBootchain = false;
-
+    
     char *_firmwareJson = nullptr;
     char *_betaFirmwareJson = nullptr;
     jssytok_t *_firmwareTokens = nullptr;;

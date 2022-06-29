@@ -583,7 +583,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
                 retassure(iBSS.first = (char *)alloc.allocate(iBSS.second), "failed to allocate memory for Rose\n");
                 size_t freadRet = 0;
                 retassure((freadRet = fread((char *) iBSS.first, 1, iBSS.second, ibss)) == iBSS.second,
-                        "failed to load iBSS. size=%zu but fread returned %zu\n", iBSS.second, freadRet);
+                          "failed to load iBSS. size=%zu but fread returned %zu\n", iBSS.second, freadRet);
                 fclose(ibss);
                 cache1 = true;
             }
@@ -595,7 +595,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
                 retassure(iBEC.first = (char *)alloc.allocate(iBEC.second), "failed to allocate memory for Rose\n");
                 size_t freadRet = 0;
                 retassure((freadRet = fread((char *) iBEC.first, 1, iBEC.second, ibec)) == iBEC.second,
-                        "failed to load iBEC. size=%zu but fread returned %zu\n", iBEC.second, freadRet);
+                          "failed to load iBEC. size=%zu but fread returned %zu\n", iBEC.second, freadRet);
                 fclose(ibec);
                 cache2 = true;
             }
@@ -610,11 +610,11 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
                     board == "n66map") {
                     if (!_noIBSS && !cache1) {
                         iBSSKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBSS",
-                                                            board);
+                                                               board);
                     }
                     if (!cache2) {
                         iBECKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBEC",
-                                                            board);
+                                                               board);
                     }
                 } else {
                     if (!_noIBSS && !cache1) {
@@ -642,7 +642,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
 
         if (_client->image4supported) {
             /* if this is 64-bit, we need to back IM4P to IMG4
-            also due to the nature of iBoot64Patchers sigpatches we need to stich a valid signed im4m to it (but nonce is ignored) */
+               also due to the nature of iBoot64Patchers sigpatches we need to stich a valid signed im4m to it (but nonce is ignored) */
             if (!cache1 && !_noIBSS) {
                 info("Repacking patched iBSS as IMG4\n");
                 iBSS = move(libipatcher::packIM4PToIMG4(iBSS.first, iBSS.second, _im4ms[0].first, _im4ms[0].second));
@@ -829,7 +829,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
                       "Failed to connect to device in Recovery Mode after ApNonce hax!");
             assure(!irecv_send_command(_client->recovery->client, "bgcolor 255 255 0"));
         }
-
+        
 
 
         if (_setNonce) {
@@ -842,7 +842,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
         }
 
         sleep(2);
-
+    
 #endif //HAVE_LIBIPATCHER
 }
 
