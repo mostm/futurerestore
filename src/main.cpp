@@ -49,6 +49,8 @@ static struct option longopts[] = {
         { "no-ibss",                    no_argument,            nullptr, '4' },
         { "rdsk",                       required_argument,      nullptr, '5' },
         { "rkrn",                       required_argument,      nullptr, '6' },
+        { "custom-ibss",                required_argument,      nullptr, 'x'},
+        { "custom-ibec",                required_argument,      nullptr, 'y'},
         { "set-nonce",                  optional_argument,      nullptr, '7' },
         { "serial",                     no_argument,            nullptr, '8' },
         { "boot-args",                  required_argument,      nullptr, '9' },
@@ -76,6 +78,8 @@ static struct option longopts[] = {
 #define FLAG_CUSTOM_LATEST          1 << 15
 #define FLAG_CUSTOM_LATEST_BUILDID  1 << 16
 #define FLAG_CUSTOM_LATEST_BETA     1 << 17
+#define FLAG_CUSTOM_IBSS            1 << 18
+#define FLAG_CUSTOM_IBEC            1 << 19
 
 void cmd_help(){
     printf("Usage: futurerestore [OPTIONS] iPSW\n");
@@ -99,6 +103,8 @@ void cmd_help(){
     printf("      --no-ibss\t\t\t\tRestoring devices with Odysseus method. For checkm8/iPwnder32 specifically, bootrom needs to be patched already with unless iPwnder.\n");
     printf("      --rdsk PATH\t\t\tSet custom restore ramdisk for entering restoremode(requires use-pwndfu)\n");
     printf("      --rkrn PATH\t\t\tSet custom restore kernelcache for entering restoremode(requires use-pwndfu)\n");
+    printf("      --custom-ibss PATH\t\tSet custom iBSS for entering pwnRecovery(requires use-pwndfu)\n");
+    printf("      --custom-ibec PATH\t\tSet custom iBEC for entering pwnRecovery(requires use-pwndfu)\n");
     printf("      --set-nonce\t\t\tSet custom nonce from your blob then exit recovery(requires use-pwndfu)\n");
     printf("      --set-nonce=0xNONCE\t\tSet custom nonce then exit recovery(requires use-pwndfu)\n");
     printf("      --serial\t\t\t\tEnable serial during boot(requires serial cable and use-pwndfu)\n");
@@ -155,6 +161,8 @@ int main_r(int argc, const char * argv[]) {
     std::string customLatestBuildID;
     const char *ramdiskPath = nullptr;
     const char *kernelPath = nullptr;
+    const char *iBSSPath = nullptr;
+    const char *iBECPath = nullptr;
     const char *custom_nonce = nullptr;
 
     vector<const char*> apticketPaths;
@@ -167,7 +175,7 @@ int main_r(int argc, const char * argv[]) {
         return -1;
     }
 
-    while ((opt = getopt_long(argc, (char* const *)argv, "ht:b:p:s:m:c:g:hiwude0z123456789af", longopts, &optindex)) > 0) {
+    while ((opt = getopt_long(argc, (char* const *)argv, "ht:b:p:s:m:c:g:x:y:hiwude0z123456789af", longopts, &optindex)) > 0) {
         switch (opt) {
             case 'h': // long option: "help"; can be called as short option
                 cmd_help();
@@ -229,6 +237,14 @@ int main_r(int argc, const char * argv[]) {
                 flags |= FLAG_RESTORE_KERNEL;
                 kernelPath = optarg;
                 break;
+            case 'x': // long option: "ibss-img4"
+                flags |= FLAG_CUSTOM_IBSS;
+                iBSSPath = optarg;
+                break;
+            case 'y': // long option: "ibec-img4"
+                flags |= FLAG_CUSTOM_IBEC;
+                iBECPath = optarg;
+                break;
             case '7': // long option: "set-nonce";
                 flags |= FLAG_SET_NONCE;
                 custom_nonce = (optarg) ? optarg : nullptr;
@@ -286,7 +302,7 @@ int main_r(int argc, const char * argv[]) {
         return -5;
     }
 
-    futurerestore client(flags & FLAG_UPDATE, flags & FLAG_IS_PWN_DFU, flags & FLAG_NO_IBSS, flags & FLAG_SET_NONCE, flags & FLAG_SERIAL, flags & FLAG_NO_RESTORE_FR);
+    futurerestore client(flags & FLAG_UPDATE, flags & FLAG_IS_PWN_DFU, flags & FLAG_NO_IBSS, flags & FLAG_SET_NONCE, flags & FLAG_SERIAL, flags & FLAG_NO_RESTORE_FR, ((flags & FLAG_CUSTOM_IBSS) && (flags & FLAG_CUSTOM_IBEC)));
     retassure(client.init(),"can't init, no device found\n");
 
     printf("futurerestore init done\n");
@@ -296,12 +312,20 @@ int main_r(int argc, const char * argv[]) {
         retassure((flags & FLAG_IS_PWN_DFU),"--rdsk requires --use-pwndfu\n");
     if(flags & FLAG_RESTORE_KERNEL)
         retassure((flags & FLAG_IS_PWN_DFU),"--rkrn requires --use-pwndfu\n");
+    if(flags & FLAG_CUSTOM_IBSS)
+            retassure((flags & FLAG_IS_PWN_DFU), "--custom-ibss requires --use-pwndfu\n");
+        if(flags & FLAG_CUSTOM_IBEC)
+            retassure((flags & FLAG_IS_PWN_DFU), "--custom-ibec requires --use-pwndfu\n");
     if(flags & FLAG_SET_NONCE)
         retassure((flags & FLAG_IS_PWN_DFU),"--set-nonce requires --use-pwndfu\n");
     if(flags & FLAG_SET_NONCE && client.is32bit())
         error("--set-nonce not supported on 32bit devices.\n");
     if(flags & FLAG_RESTORE_RAMDISK)
         retassure((flags & FLAG_RESTORE_KERNEL),"--rdsk requires --rkrn\n");
+    if(flags & FLAG_CUSTOM_IBSS)
+            retassure((flags & FLAG_CUSTOM_IBEC), "--ibss-img4 requires --ibec-img4\n");
+        if(flags & FLAG_CUSTOM_IBEC)
+            retassure((flags & FLAG_CUSTOM_IBSS), "--ibec-img4 requires --ibss-img4\n");
     if(flags & FLAG_SERIAL) {
         retassure((flags & FLAG_IS_PWN_DFU),"--serial requires --use-pwndfu\n");
         retassure(!(flags & FLAG_BOOT_ARGS),"--serial conflicts with --boot-args\n");
@@ -367,8 +391,17 @@ int main_r(int argc, const char * argv[]) {
             client.loadKernel(kernelPath);
         }
 
+        if(flags & FLAG_CUSTOM_IBSS) {
+            client.setiBSSPath(iBSSPath);
+        }
+        
+        if(flags & FLAG_CUSTOM_IBEC) {
+            client.setiBECPath(iBECPath);
+        }
+
         if(flags & FLAG_SET_NONCE) {
-            client.setNonce(custom_nonce);
+            reterror("--set-nonce is disabled in this fork\n");
+            return -1;
         }
 
         if(flags & FLAG_BOOT_ARGS) {

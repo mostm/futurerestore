@@ -63,7 +63,8 @@ class futurerestore {
     bool _setNonce = false;
     bool _serial = false;
     bool _noRestore = false;
-    
+    bool _customBootchain = false;
+
     char *_firmwareJson = nullptr;
     char *_betaFirmwareJson = nullptr;
     jssytok_t *_firmwareTokens = nullptr;;
@@ -81,6 +82,8 @@ class futurerestore {
 
     std::string _ramdiskPath;
     std::string _kernelPath;
+    std::string _iBSSPath;
+    std::string _iBECPath;
     std::string _sepPath;
     std::string _sepManifestPath;
     std::string _basebandPath;
@@ -98,7 +101,7 @@ class futurerestore {
     void enterPwnRecovery(plist_t build_identity, std::string bootargs);
 
 public:
-    futurerestore(bool isUpdateInstall = false, bool isPwnDfu = false, bool noIBSS = false, bool setNonce = false, bool serial = false, bool noRestore = false);
+    futurerestore(bool isUpdateInstall = false, bool isPwnDfu = false, bool noIBSS = false, bool setNonce = false, bool serial = false, bool noRestore = false, bool customBootchain = false);
     bool init();
     int getDeviceMode(bool reRequest);
     uint64_t getDeviceEcid();
@@ -143,6 +146,8 @@ public:
     void setCustomLatestBuildID(std::string version, bool beta){_customLatestBuildID = version; _useCustomLatest = false; _useCustomLatestBuildID = true; _useCustomLatestBeta = beta;}
     void setSepPath(std::string sepPath) {_sepPath = sepPath;}
     void setSepManifestPath(std::string sepManifestPath) {_sepManifestPath = sepManifestPath;}
+    void setiBSSPath(std::string iBSSPath) {_iBSSPath = iBSSPath;}
+    void setiBECPath(std::string iBECPath) {_iBECPath = iBECPath;}
     void setRamdiskPath(std::string ramdiskPath) {_ramdiskPath = ramdiskPath;}
     void setKernelPath(std::string kernelPath) {_kernelPath = kernelPath;}
     void setBasebandPath(std::string basebandPath) {_basebandPath = basebandPath;}

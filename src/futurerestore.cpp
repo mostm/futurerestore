@@ -128,8 +128,8 @@ void idevice_event_cb(const idevice_event_t *event, void *userdata);
 #pragma mark futurerestore
 
 futurerestore::futurerestore(bool isUpdateInstall, bool isPwnDfu, bool noIBSS, bool setNonce, bool serial,
-                             bool noRestore) : _isUpdateInstall(isUpdateInstall), _isPwnDfu(isPwnDfu), _noIBSS(noIBSS),
-                                               _setNonce(setNonce), _serial(serial), _noRestore(noRestore) {
+                             bool noRestore, bool customBootchain) : _isUpdateInstall(isUpdateInstall), _isPwnDfu(isPwnDfu), _noIBSS(noIBSS),
+                                               _setNonce(setNonce), _serial(serial), _noRestore(noRestore), _customBootchain(customBootchain) {
     _client = idevicerestore_client_new();
     retassure(_client != nullptr, "could not create idevicerestore client\n");
 
@@ -535,116 +535,142 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
               "Failed to connect to device in DFU Mode!");
     mutex_unlock(&_client->device_event_mutex);
     info("Device found in DFU Mode.\n");
-
-    ibss_name.append(getDeviceBoardNoCopy());
-    ibec_name.append(getDeviceBoardNoCopy());
-    ibss_name.append(".");
-    ibec_name.append(".");
-    ibss_name.append(_client->build);
-    ibec_name.append(_client->build);
-    if (_client->image4supported) {
-        ibss_name.append(img4_end);
-        ibec_name.append(img4_end);
-    } else {
-        ibss_name.append(img3_end);
-        ibec_name.append(img3_end);
-    }
-    std::allocator<uint8_t> alloc;
-    if (!_noCache) {
-        ibss = fopen(ibss_name.c_str(), "rb");
-        if (ibss) {
-            fseek(ibss, 0, SEEK_END);
-            iBSS.second = ftell(ibss);
-            fseek(ibss, 0, SEEK_SET);
-            retassure(iBSS.first = (char *)alloc.allocate(iBSS.second), "failed to allocate memory for Rose\n");
-            size_t freadRet = 0;
-            retassure((freadRet = fread((char *) iBSS.first, 1, iBSS.second, ibss)) == iBSS.second,
-                      "failed to load iBSS. size=%zu but fread returned %zu\n", iBSS.second, freadRet);
-            fclose(ibss);
-            cache1 = true;
+    if(_customBootchain) {
+          std::allocator<uint8_t> alloc;
+           ibss = fopen(_iBSSPath.c_str(), "rb");
+           if (ibss) {
+               fseek(ibss, 0, SEEK_END);
+               iBSS.second = ftell(ibss);
+               fseek(ibss, 0, SEEK_SET);
+               retassure(iBSS.first = (char *)alloc.allocate(iBSS.second), "failed to malloc memory for Rose\n");
+               size_t freadRet = 0;
+               retassure((freadRet = fread((char *) iBSS.first, 1, iBSS.second, ibss)) == iBSS.second,
+                         "failed to load iBSS. size=%zu but fread returned %zu\n", iBSS.second, freadRet);
+               fclose(ibss);
+           }
+           ibec = fopen(_iBECPath.c_str(), "rb");
+           if (ibec) {
+               fseek(ibec, 0, SEEK_END);
+               iBEC.second = ftell(ibec);
+               fseek(ibec, 0, SEEK_SET);
+               retassure(iBEC.first = (char *)alloc.allocate(iBEC.second), "failed to malloc memory for Rose\n");
+               size_t freadRet = 0;
+               retassure((freadRet = fread((char *) iBEC.first, 1, iBEC.second, ibec)) == iBEC.second,
+                         "failed to load iBEC. size=%zu but fread returned %zu\n", iBEC.second, freadRet);
+               fclose(ibec);
+           }
+       } else {
+        ibss_name.append(getDeviceBoardNoCopy());
+        ibec_name.append(getDeviceBoardNoCopy());
+        ibss_name.append(".");
+        ibec_name.append(".");
+        ibss_name.append(_client->build);
+        ibec_name.append(_client->build);
+        if (_client->image4supported) {
+            ibss_name.append(img4_end);
+            ibec_name.append(img4_end);
+        } else {
+            ibss_name.append(img3_end);
+            ibec_name.append(img3_end);
         }
-        ibec = fopen(ibec_name.c_str(), "rb");
-        if (ibec) {
-            fseek(ibec, 0, SEEK_END);
-            iBEC.second = ftell(ibec);
-            fseek(ibec, 0, SEEK_SET);
-            retassure(iBEC.first = (char *)alloc.allocate(iBEC.second), "failed to allocate memory for Rose\n");
-            size_t freadRet = 0;
-            retassure((freadRet = fread((char *) iBEC.first, 1, iBEC.second, ibec)) == iBEC.second,
-                      "failed to load iBEC. size=%zu but fread returned %zu\n", iBEC.second, freadRet);
-            fclose(ibec);
-            cache2 = true;
-        }
-    }
-
-    /* Patch bootloaders */
-    if (!cache1 && !cache2) {
-        try {
-            std::string board = getDeviceBoardNoCopy();
-            info("Getting firmware keys for: %s\n", board.c_str());
-            if (board == "n71ap" || board == "n71map" || board == "n69ap" || board == "n69uap" || board == "n66ap" ||
-                board == "n66map") {
-                if (!_noIBSS && !cache1) {
-                    iBSSKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBSS",
-                                                           board);
-                }
-                if (!cache2) {
-                    iBECKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBEC",
-                                                           board);
-                }
-            } else {
-                if (!_noIBSS && !cache1) {
-                    iBSSKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBSS");
-                }
-                if (!cache2) {
-                    iBECKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBEC");
-                }
+        std::allocator<uint8_t> alloc;
+        if (!_noCache) {
+            ibss = fopen(ibss_name.c_str(), "rb");
+            if (ibss) {
+                fseek(ibss, 0, SEEK_END);
+                iBSS.second = ftell(ibss);
+                fseek(ibss, 0, SEEK_SET);
+                retassure(iBSS.first = (char *)alloc.allocate(iBSS.second), "failed to allocate memory for Rose\n");
+                size_t freadRet = 0;
+                retassure((freadRet = fread((char *) iBSS.first, 1, iBSS.second, ibss)) == iBSS.second,
+                        "failed to load iBSS. size=%zu but fread returned %zu\n", iBSS.second, freadRet);
+                fclose(ibss);
+                cache1 = true;
             }
-        } catch (tihmstar::exception &e) {
-            reterror("getting keys failed with error: %d (%s). Are keys publicly available?", e.code(), e.what());
+            ibec = fopen(ibec_name.c_str(), "rb");
+            if (ibec) {
+                fseek(ibec, 0, SEEK_END);
+                iBEC.second = ftell(ibec);
+                fseek(ibec, 0, SEEK_SET);
+                retassure(iBEC.first = (char *)alloc.allocate(iBEC.second), "failed to allocate memory for Rose\n");
+                size_t freadRet = 0;
+                retassure((freadRet = fread((char *) iBEC.first, 1, iBEC.second, ibec)) == iBEC.second,
+                        "failed to load iBEC. size=%zu but fread returned %zu\n", iBEC.second, freadRet);
+                fclose(ibec);
+                cache2 = true;
+            }
         }
-    }
 
-    if (!iBSS.first && !_noIBSS) {
-        info("Patching iBSS\n");
-        iBSS = getIPSWComponent(_client, build_identity, "iBSS");
-        iBSS = move(libipatcher::patchiBSS((char *) iBSS.first, iBSS.second, iBSSKeys));
-    }
-    if (!iBEC.first) {
-        info("Patching iBEC\n");
-        iBEC = getIPSWComponent(_client, build_identity, "iBEC");
-        iBEC = move(libipatcher::patchiBEC((char *) iBEC.first, iBEC.second, iBECKeys, std::move(bootargs)));
-    }
-
-    if (_client->image4supported) {
-        /* if this is 64-bit, we need to back IM4P to IMG4
-           also due to the nature of iBoot64Patchers sigpatches we need to stich a valid signed im4m to it (but nonce is ignored) */
-        if (!cache1 && !_noIBSS) {
-            info("Repacking patched iBSS as IMG4\n");
-            iBSS = move(libipatcher::packIM4PToIMG4(iBSS.first, iBSS.second, _im4ms[0].first, _im4ms[0].second));
+        /* Patch bootloaders */
+        if (!cache1 && !cache2) {
+            try {
+                std::string board = getDeviceBoardNoCopy();
+                info("Getting firmware keys for: %s\n", board.c_str());
+                if (board == "n71ap" || board == "n71map" || board == "n69ap" || board == "n69uap" || board == "n66ap" ||
+                    board == "n66map") {
+                    if (!_noIBSS && !cache1) {
+                        iBSSKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBSS",
+                                                            board);
+                    }
+                    if (!cache2) {
+                        iBECKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBEC",
+                                                            board);
+                    }
+                } else {
+                    if (!_noIBSS && !cache1) {
+                        iBSSKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBSS");
+                    }
+                    if (!cache2) {
+                        iBECKeys = libipatcher::getFirmwareKey(_client->device->product_type, _client->build, "iBEC");
+                    }
+                }
+            } catch (tihmstar::exception &e) {
+                reterror("getting keys failed with error: %d (%s). Are keys publicly available?", e.code(), e.what());
+            }
         }
-        if (!cache2) {
-            info("Repacking patched iBEC as IMG4\n");
-            iBEC = move(libipatcher::packIM4PToIMG4(iBEC.first, iBEC.second, _im4ms[0].first, _im4ms[0].second));
-        }
-    }
 
-    if (!_noIBSS) {
-        retassure(ibss = fopen(ibss_name.c_str(), "wb"), "can't save patched ibss at %s\n", ibss_name.c_str());
-        retassure(rv = fwrite(iBSS.first, iBSS.second, 1, ibss), "can't save patched ibss at %s\n", ibss_name.c_str());
-        fflush(ibss);
-        fclose(ibss);
+        if (!iBSS.first && !_noIBSS) {
+            info("Patching iBSS\n");
+            iBSS = getIPSWComponent(_client, build_identity, "iBSS");
+            iBSS = move(libipatcher::patchiBSS((char *) iBSS.first, iBSS.second, iBSSKeys));
+        }
+        if (!iBEC.first) {
+            info("Patching iBEC\n");
+            iBEC = getIPSWComponent(_client, build_identity, "iBEC");
+            iBEC = move(libipatcher::patchiBEC((char *) iBEC.first, iBEC.second, iBECKeys, std::move(bootargs)));
+        }
+
+        if (_client->image4supported) {
+            /* if this is 64-bit, we need to back IM4P to IMG4
+            also due to the nature of iBoot64Patchers sigpatches we need to stich a valid signed im4m to it (but nonce is ignored) */
+            if (!cache1 && !_noIBSS) {
+                info("Repacking patched iBSS as IMG4\n");
+                iBSS = move(libipatcher::packIM4PToIMG4(iBSS.first, iBSS.second, _im4ms[0].first, _im4ms[0].second));
+            }
+            if (!cache2) {
+                info("Repacking patched iBEC as IMG4\n");
+                iBEC = move(libipatcher::packIM4PToIMG4(iBEC.first, iBEC.second, _im4ms[0].first, _im4ms[0].second));
+            }
+        }
+
+        if (!_noIBSS) {
+            retassure(ibss = fopen(ibss_name.c_str(), "wb"), "can't save patched ibss at %s\n", ibss_name.c_str());
+            retassure(rv = fwrite(iBSS.first, iBSS.second, 1, ibss), "can't save patched ibss at %s\n", ibss_name.c_str());
+            fflush(ibss);
+            fclose(ibss);
+        }
+        retassure(ibec = fopen(ibec_name.c_str(), "wb"), "can't save patched ibec at %s\n", ibec_name.c_str());
+        retassure(rv = fwrite(iBEC.first, iBEC.second, 1, ibec), "can't save patched ibec at %s\n", ibec_name.c_str());
+        fflush(ibec);
+        fclose(ibec);
     }
-    retassure(ibec = fopen(ibec_name.c_str(), "wb"), "can't save patched ibec at %s\n", ibec_name.c_str());
-    retassure(rv = fwrite(iBEC.first, iBEC.second, 1, ibec), "can't save patched ibec at %s\n", ibec_name.c_str());
-    fflush(ibec);
-    fclose(ibec);
 
     /* Send and boot bootloaders */
     irecv_error_t err = IRECV_E_UNKNOWN_ERROR;
     if (!_noIBSS) {
         /* send iBSS */
         info("Sending %s (%lu bytes)...\n", "iBSS", iBSS.second);
+        if (_customBootchain) info("NOTE: Using custom iBSS: %s\n", _iBSSPath.c_str());
         mutex_lock(&_client->device_event_mutex);
         err = irecv_send_buffer(_client->dfu->client, (unsigned char *) (char *) iBSS.first,
                                 (unsigned long) iBSS.second, 1);
@@ -671,6 +697,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
             retassure(irecv_usb_set_configuration(_client->dfu->client, 1) >= 0, "ERROR: set configuration failed\n");
             /* send iBEC */
             info("Sending %s (%lu bytes)...\n", "iBEC", iBEC.second);
+            if (_customBootchain) info("NOTE: Using custom iBEC: %s\n", _iBECPath.c_str());
             mutex_lock(&_client->device_event_mutex);
             err = irecv_send_buffer(_client->dfu->client, (unsigned char *) (char *) iBEC.first,
                                     (unsigned long) iBEC.second, 1);
@@ -765,6 +792,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
 
             /* send iBEC */
             info("Sending %s (%lu bytes)...\n", "iBEC", iBEC.second);
+            if(_customBootchain) info("NOTE: Using custom iBEC: %s\n", _iBECPath.c_str());
             mutex_lock(&_client->device_event_mutex);
             err = irecv_send_buffer(_client->dfu->client, (unsigned char *) (char *) iBEC.first,
                                     (unsigned long) iBEC.second, 1);
@@ -800,6 +828,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
             retassure(irecv_usb_set_configuration(_client->dfu->client, 1) >= 0, "ERROR: set configuration failed\n");
             /* send iBEC */
             info("Sending %s (%lu bytes)...\n", "iBEC", iBEC.second);
+            if(_customBootchain) info("NOTE: Using custom iBEC: %s\n", _iBECPath.c_str());
             mutex_lock(&_client->device_event_mutex);
             err = irecv_send_buffer(_client->dfu->client, (unsigned char *) (char *) iBEC.first,
                                     (unsigned long) iBEC.second, 1);
