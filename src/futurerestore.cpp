@@ -761,29 +761,6 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
         }
         auto nonceelem = img4tool::getValFromIM4M({_im4ms[0].first, _im4ms[0].second}, 'BNCH');
 
-        info("ApNonce pre-hax:\n");
-        getDeviceMode(true);
-        retassure(((recovery_client_new(_client) == IRECV_E_SUCCESS) ||
-                   (mutex_unlock(&_client->device_event_mutex), 0)),
-                  "Failed to connect to device in Recovery Mode!");
-        if (get_ap_nonce(_client, &_client->nonce, &_client->nonce_size) < 0) {
-            reterror("Failed to get apnonce from device!");
-        }
-
-        std::string generator = (_setNonce && _custom_nonce != nullptr) ? _custom_nonce : getGeneratorFromSHSH2(
-                _client->tss);
-
-        if ((_setNonce && _custom_nonce != nullptr) ||
-            memcmp(_client->nonce, nonceelem.payload(), _client->nonce_size) != 0) {
-            if (!_setNonce)
-                info("ApNonce from device doesn't match IM4M nonce, applying hax...\n");
-
-            assure(_client->tss);
-            info("Writing generator=%s to nvram!\n", generator.c_str());
-
-            retassure(!irecv_setenv(_client->recovery->client, "com.apple.System.boot-nonce", generator.c_str()),
-                      "Failed to write generator to nvram!");
-            retassure(!irecv_saveenv(_client->recovery->client), "Failed to save nvram!");
 
             getDeviceMode(true);
             retassure(((dfu_client_new(_client) == IRECV_E_SUCCESS) || (mutex_unlock(&_client->device_event_mutex), 0)),
@@ -851,27 +828,9 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
                        (mutex_unlock(&_client->device_event_mutex), 0)),
                       "Failed to connect to device in Recovery Mode after ApNonce hax!");
             assure(!irecv_send_command(_client->recovery->client, "bgcolor 255 255 0"));
-            info("APNonce from device already matches IM4M nonce, no need for extra hax...\n");
         }
-        retassure(!irecv_setenv(_client->recovery->client, "com.apple.System.boot-nonce", generator.c_str()),
-                  "failed to write generator to nvram");
-        retassure(!irecv_saveenv(_client->recovery->client), "failed to save nvram");
-        uint64_t gen = std::stoul(generator, nullptr, 16);
-        auto *nonce = (uint8_t *)alloc.allocate(_client->nonce_size);
-        if (_client->nonce_size == 20) {
-            SHA1((unsigned char *) &gen, 8, nonce);
-        } else if (_client->nonce_size == 32) {
-            SHA384((unsigned char *) &gen, 8, nonce);
-        } else {
-            reterror("Failed to set nonce generator: %s! Unknown nonce size: %d\n", generator.c_str(),
-                     _client->nonce_size);
-        }
-        for (int i = 0; i < _client->nonce_size; i++) {
-            if (*(uint8_t *) (nonce + i) != *(uint8_t *) (_client->nonce + i)) {
-                reterror("Failed to set nonce generator: %s!\n", generator.c_str());
-            }
-        }
-        info("Successfully set nonce generator: %s\n", generator.c_str());
+
+
 
         if (_setNonce) {
             info("Done setting nonce!\n");
@@ -883,7 +842,7 @@ void futurerestore::enterPwnRecovery(plist_t build_identity, std::string bootarg
         }
 
         sleep(2);
-    }
+
 #endif //HAVE_LIBIPATCHER
 }
 
